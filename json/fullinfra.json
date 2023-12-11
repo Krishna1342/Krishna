@@ -1,0 +1,443 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "This is the template for the vpc",
+    "Parameters": {
+        "vpccidr": {
+            "Description": "this is the cidr for the vpc",
+            "Type": "String",
+            "Default": "10.10.0.0/16"
+        },
+        "subnetcidrs": {
+            "Description": "this is the parameter for the subnets",
+            "Type": "CommaDelimitedList",
+            "Default": "10.10.0.0/24,10.10.1.0/24,10.10.2.0/24"
+        },
+        "webami": {
+            "Description": "this is the ami for web instance",
+            "Type": "AWS::EC2::Image::Id"
+        },
+        "webinstancetype": {
+            "Description": "Instance type for the web ami",
+            "Type": "String",
+            "Default": "t2.micro"
+        },
+        "webkey": {
+            "Description": "key for the websubnet instance",
+            "Type": "AWS::EC2::KeyPair::KeyName"
+        },
+        "appami": {
+            "Description": "this is the ami for web instance",
+            "Type": "AWS::EC2::Image::Id"
+        },
+        "appinstancetype": {
+            "Description": "Instance type for the web ami",
+            "Type": "String",
+            "Default": "t2.micro"
+        },
+        "appkey": {
+            "Description": "key for the websubnet instance",
+            "Type": "AWS::EC2::KeyPair::KeyName"
+        },
+        "webaz": {
+            "Description": "this is th az for the web subnet",
+            "Type": "AWS::EC2::AvailabilityZone::Name"
+        },
+        "appaz": {
+            "Description": "this is the az for the app subnet",
+            "Type": "AWS::EC2::AvailabilityZone::Name"
+        },
+        "dbaz": {
+            "Description": "this is the az for the db subnet",
+            "Type": "AWS::EC2::AvailabilityZone::Name"
+        }
+    },
+    "Resources": {
+        "ntirevpc": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": {
+                    "Ref": "vpccidr"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "myvpc"
+                    }
+                ]
+            }
+        },
+        "websubnet": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "AvailabilityZone": {
+                    "Ref": "webaz"
+                },
+                "VpcId": {
+                    "Ref": "ntirevpc"
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Ref": "subnetcidrs"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "web"
+                    }
+                ]
+            }
+        },
+        "appsubnet": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "AvailabilityZone": {
+                    "Ref": "appaz"
+                },
+                "VpcId": {
+                    "Ref": "ntirevpc"
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Ref": "subnetcidrs"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "app"
+                    }
+                ]
+            }
+        },
+        "dbsubnet": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "AvailabilityZone": {
+                    "Ref": "dbaz"
+                },
+                "VpcId": {
+                    "Ref": "ntirevpc"
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        2,
+                        {
+                            "Ref": "subnetcidrs"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "db"
+                    }
+                ]
+            }
+        },
+        "igw": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "myigw"
+                    }
+                ]
+            }
+        },
+        "AttachGateway": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "ntirevpc"
+                },
+                "InternetGatewayId": {
+                    "Ref": "igw"
+                }
+            }
+        },
+        "publicrt": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "ntirevpc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "public"
+                    }
+                ]
+            }
+        },
+        "privatert": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "ntirevpc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "private"
+                    }
+                ]
+            }
+        },
+        "publictoigw": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "publicrt"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "igw"
+                }
+            }
+        },
+        "webtopublic": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Description": "this route connects the websubnet to publicrt",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "websubnet"
+                },
+                "RouteTableId": {
+                    "Ref": "publicrt"
+                }
+            }
+        },
+        "apptoprivate": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Description": "this route connects the appsubnet to privatert",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "appsubnet"
+                },
+                "RouteTableId": {
+                    "Ref": "privatert"
+                }
+            }
+        },
+        "dbtoprivate": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Description": "this route connects the appsubnet to privatert",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "dbsubnet"
+                },
+                "RouteTableId": {
+                    "Ref": "privatert"
+                }
+            }
+        },
+        "websg": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "this opens the necessary ports for the websubnet",
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 22,
+                        "ToPort": 22,
+                        "CidrIp": "0.0.0.0/0"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ],
+                "VpcId": {
+                    "Ref": "ntirevpc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "app"
+                    }
+                ]
+            }
+        },
+        "appsg": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "this opens the necessery ports for the appsg",
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 0,
+                        "ToPort": 65535,
+                        "CidrIp": {
+                            "Ref": "vpccidr"
+                        }
+                    }
+                ],
+                "VpcId": {
+                    "Ref": "ntirevpc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "app"
+                    }
+                ]
+            }
+        },
+        "dbsg": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "This allows the ports for the dbsubnet",
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 3306,
+                        "ToPort": 3306,
+                        "CidrIp": {
+                            "Ref": "vpccidr"
+                        }
+                    }
+                ],
+                "VpcId": {
+                    "Ref": "ntirevpc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "db"
+                    }
+                ]
+            }
+        },
+        "webec2": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "ImageId": {
+                    "Ref": "webami"
+                },
+                "InstanceType": {
+                    "Ref": "webinstancetype"
+                },
+                "KeyName": {
+                    "Ref": "webkey"
+                },
+                "NetworkInterfaces": [
+                    {
+                        "AssociatePublicIpAddress": true,
+                        "SubnetId": {
+                            "Ref": "websubnet"
+                        },
+                        "GroupSet": [
+                            {
+                                "Ref": "websg"
+                            }
+                        ],
+                        "DeviceIndex": "0"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "webec2"
+                    }
+                ]
+            }
+        },
+        "appec2": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "ImageId": {
+                    "Ref": "appami"
+                },
+                "InstanceType": {
+                    "Ref": "appinstancetype"
+                },
+                "KeyName": {
+                    "Ref": "appkey"
+                },
+                "NetworkInterfaces": [
+                    {
+                        "DeviceIndex": "0",
+                        "SubnetId": {
+                            "Ref": "appsubnet"
+                        },
+                        "GroupSet": [
+                            {
+                                "Ref": "appsg"
+                            }
+                        ]
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "app"
+                    }
+                ]
+            }
+        },
+        "rdsDBSubnetGroup": {
+            "Type": "AWS::RDS::DBSubnetGroup",
+            "Properties": {
+                "DBSubnetGroupDescription": "this is the rdssubnet group for the db instane",
+                "SubnetIds": [
+                    {
+                        "Ref": "appsubnet"
+                    },
+                    {
+                        "Ref": "dbsubnet"
+                    }
+                ],
+                "Tags": []
+            }
+        },
+        "rdsDBInstance": {
+            "Type": "AWS::RDS::DBInstance",
+            "Properties": {
+                "AllocatedStorage": "20",
+                "DBInstanceClass": "db.t2.micro",
+                "AllowMajorVersionUpgrade": false,
+                "AutoMinorVersionUpgrade": false,
+                "BackupRetentionPeriod": 0, 
+                "DBSubnetGroupName": {
+                    "Ref": "rdsDBSubnetGroup"
+                },
+                "DBInstanceIdentifier": "qtrdsdb",
+                "DBName": "employee",
+                "Engine": "mysql",
+                "EngineVersion": "8.0",
+                "MasterUsername": "admin",
+                "MasterUserPassword": "adminadmin",
+                "MultiAZ": false,
+                "PubliclyAccessible": false,
+                "StorageType": "gp2",
+                "VPCSecurityGroups": [
+                    {
+                        "Ref": "dbsg"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "ntiredb"
+                    }
+                ]
+            }
+        }
+    }
+}
